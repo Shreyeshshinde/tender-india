@@ -81,6 +81,8 @@ export type TenderFull = TenderSummary & {
   bid_start_at: string | null;
   pre_bid_at: string | null;
   source_url: string | null;
+  portal_url?: string | null;
+  document_url?: string | null;
   docs_status: DocsStatus;
   docs_requested_at: string | null;
   docs_fetched_at: string | null;

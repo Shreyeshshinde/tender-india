@@ -124,8 +124,31 @@ def tender_summary(t: Tender, since=None):
     }
 
 
+_FILE_EXTS = (".pdf", ".zip", ".rar", ".xls", ".xlsx", ".doc", ".docx")
+
+
+def portal_links(t: Tender):
+    """(website to open, direct document link or None). Some scrapers store the bid
+    document itself as source_url (GeM); the "open portal" button must not download it."""
+    from urllib.parse import urlparse
+    from .scraper.portals import PORTALS
+    url = t.source_url or ""
+    is_file = "showbidDocument" in url or urlparse(url).path.lower().endswith(_FILE_EXTS)
+    if t.source == "gem":
+        portal = "https://bidplus.gem.gov.in/all-bids"
+    elif t.source in PORTALS:
+        portal = PORTALS[t.source]
+    elif url and not is_file:
+        portal = url
+    else:
+        u = urlparse(url)
+        portal = f"{u.scheme}://{u.netloc}/" if u.netloc else None
+    return portal, (url if is_file else None)
+
+
 def tender_full(t: Tender):
     data = tender_summary(t)
+    portal_url, document_url = portal_links(t)
     data.update({
         "description": t.description,
         "org_chain": t.org_chain,
@@ -142,6 +165,8 @@ def tender_full(t: Tender):
         "bid_start_at": _dt(t.bid_start_at),
         "pre_bid_at": _dt(t.pre_bid_at),
         "source_url": t.source_url,
+        "portal_url": portal_url,
+        "document_url": document_url,
         "first_seen_at": _dt(t.first_seen_at),
         "updated_at": _dt(t.updated_at),
         "docs_status": t.docs_status,

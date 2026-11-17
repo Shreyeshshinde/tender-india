@@ -127,11 +127,18 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
             {t.documents.length > 0 && t.docs_enabled !== false && (
               <GetDocuments tenderId={t.id} status={t.docs_status} />
             )}
-            {t.source_url && (
-              <a href={t.source_url} target="_blank" rel="noreferrer" className="btn secondary">
-                Open official portal
-              </a>
-            )}
+            <div className="portal-btns">
+              {(t.portal_url ?? t.source_url) && (
+                <a href={(t.portal_url ?? t.source_url)!} target="_blank" rel="noreferrer" className="btn secondary">
+                  Open official portal
+                </a>
+              )}
+              {t.document_url && (
+                <a href={t.document_url} target="_blank" rel="noreferrer" className="btn">
+                  Download bid document
+                </a>
+              )}
+            </div>
             <p className="muted small">
               On the official portal, search for Tender ID <b>{t.tender_id}</b>.
             </p>

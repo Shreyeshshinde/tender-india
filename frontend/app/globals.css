@@ -202,3 +202,5 @@ a { color: var(--brand); }
   .refresh-note { text-align: left; }
   .head-side { flex-direction: row; align-items: center; }
 }
+
+.portal-btns { display: flex; flex-wrap: wrap; gap: 8px; }
