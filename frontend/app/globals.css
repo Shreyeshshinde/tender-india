@@ -225,3 +225,4 @@ a { color: var(--brand); }
 .src-row:last-child { border-bottom: none; }
 .src-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .src-url { font-size: 13px; word-break: break-all; }
+.src-info .chip { align-self: flex-start; font-size: 12px; }
