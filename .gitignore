@@ -18,3 +18,4 @@ deploy/hf.env
 backups/
 deploy/hf.env
 .vercel/
+deploy/github-token.txt
