@@ -7,12 +7,14 @@ export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
   let sources: CustomSource[] = [];
+  let builtin: { name: string; url: string; kind: string }[] = [];
   let failed = false;
   try {
-    sources = await api.sources();
+    [sources, builtin] = await Promise.all([api.sources(), api.builtinSources()]);
   } catch {
     failed = true;
   }
+  const total = sources.length + builtin.length;
 
   return (
     <article className="detail">
@@ -33,10 +35,12 @@ export default async function SourcesPage() {
         </p>
       </section>
 
+      {!failed && <p className="muted">{total} websites are checked on every refresh.</p>}
+
       <section className="panel">
-        <h2>Added websites ({sources.length})</h2>
+        <h2>Your added websites ({sources.length})</h2>
         {failed && <p className="muted">Cannot reach the server right now.</p>}
-        {!failed && sources.length === 0 && <p className="muted">None yet.</p>}
+        {!failed && sources.length === 0 && <p className="muted">None yet. Websites you add appear here, newest at the top.</p>}
         <ul className="src-list">
           {sources.map((s) => (
             <li key={s.id} className="src-row">
@@ -54,6 +58,23 @@ export default async function SourcesPage() {
           ))}
         </ul>
       </section>
+
+      {builtin.length > 0 && (
+        <section className="panel">
+          <h2>Already scraped ({builtin.length})</h2>
+          <p className="muted small">Built into the scrapers, checked on every refresh.</p>
+          <ul className="src-list">
+            {builtin.map((s) => (
+              <li key={s.url} className="src-row">
+                <div className="src-info">
+                  <b>{s.name}</b> <span className="chip">{s.kind}</span>
+                  <a href={s.url} target="_blank" rel="noreferrer" className="src-url">{s.url}</a>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </article>
   );
 }

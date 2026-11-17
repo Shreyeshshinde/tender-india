@@ -114,6 +114,7 @@ export type CustomSource = {
 
 export const api = {
   sources: () => get<CustomSource[]>("/api/sources"),
+  builtinSources: () => get<{ name: string; url: string; kind: string }[]>("/api/sources/builtin"),
   tenders: (params: URLSearchParams) =>
     get<{ total: number; page: number; page_size: number; items: TenderSummary[] }>(
       `/api/tenders?${params.toString()}`

@@ -306,10 +306,33 @@ def source_dict(s: CustomSource):
             "last_status": s.last_status, "last_found": s.last_found}
 
 
+def builtin_sources():
+    """Websites the built-in scrapers already read (taken from their code, so always current)."""
+    from .scraper import adani, bihar, gem, gujarat, sites, telangana
+    from .scraper.portals import PORTALS
+    out = [{"name": "GeM (Government e-Marketplace)", "url": gem.ALL_BIDS_URL, "kind": "GeM"}]
+    for key, cfg in telangana.PORTALS.items():
+        out.append({"name": f"{cfg['state']} eProcurement", "url": cfg["home"], "kind": "State portal"})
+    out.append({"name": "Bihar eProcurement", "url": bihar.LIST_URL, "kind": "State portal"})
+    out.append({"name": "Gujarat nProcure", "url": gujarat.HOME, "kind": "State portal"})
+    for name, url, *_ in adani.AIRPORTS:
+        out.append({"name": f"{name} (Adani)", "url": url, "kind": "Airport"})
+    for cfg in sites.SITES.values():
+        out.append({"name": cfg["name"], "url": cfg["url"], "kind": "Website"})
+    for key, url in PORTALS.items():
+        out.append({"name": DISPLAY_NAMES.get(key, key), "url": url, "kind": "NIC portal"})
+    return out
+
+
 @app.get("/api/sources")
 def list_sources(db: Session = Depends(get_session)):
-    """Websites added on the website; scraped on every refresh."""
+    """Websites added on the website (newest first); scraped on every refresh."""
     return [source_dict(s) for s in db.scalars(select(CustomSource).order_by(CustomSource.id.desc()))]
+
+
+@app.get("/api/sources/builtin")
+def list_builtin_sources():
+    return builtin_sources()
 
 
 @app.post("/api/sources", dependencies=[Depends(require_admin)])
