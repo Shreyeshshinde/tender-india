@@ -126,6 +126,22 @@ class TenderChange(Base):
     tender: Mapped[Tender] = relationship(back_populates="changes")
 
 
+class CustomSource(Base):
+    """A website you added on the website's "Websites" page. Checked on every refresh
+    (app/scraper/custom.py)."""
+    __tablename__ = "custom_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(500), unique=True)
+    kind: Mapped[str] = mapped_column(String(20))              # nic (GePNIC portal) | page
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_status: Mapped[str | None] = mapped_column(Text)     # what happened last time
+    last_found: Mapped[int | None] = mapped_column()           # relevant tenders seen last time
+
+
 class ScrapeRun(Base):
     """One refresh = one round of every scraper (app/schedule.py).
 

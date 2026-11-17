@@ -100,7 +100,20 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export type CustomSource = {
+  id: number;
+  name: string;
+  url: string;
+  kind: "nic" | "page";
+  enabled: boolean;
+  created_at: string | null;
+  last_run_at: string | null;
+  last_status: string | null;
+  last_found: number | null;
+};
+
 export const api = {
+  sources: () => get<CustomSource[]>("/api/sources"),
   tenders: (params: URLSearchParams) =>
     get<{ total: number; page: number; page_size: number; items: TenderSummary[] }>(
       `/api/tenders?${params.toString()}`

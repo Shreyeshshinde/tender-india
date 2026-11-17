@@ -204,3 +204,24 @@ a { color: var(--brand); }
 }
 
 .portal-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- added websites ---------- */
+.topbar-right { display: flex; align-items: center; gap: 18px; }
+.top-link { color: inherit; font-weight: 600; font-size: 14px; text-decoration: none; padding: 5px 12px;
+            border: 1px solid rgba(255,255,255,.45); border-radius: 99px; }
+.top-link:hover { background: rgba(255,255,255,.12); }
+.page-title { font-size: 24px; margin: 0 0 6px; }
+.src-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.src-form input { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+                  background: var(--bg); color: var(--ink); flex: 1 1 220px; min-width: 0; }
+.src-form button { font: inherit; font-weight: 600; padding: 8px 18px; border: none; border-radius: 8px;
+                   background: var(--brand); color: var(--brand-ink); cursor: pointer; }
+.src-form button:disabled { opacity: .6; cursor: wait; }
+.src-msg { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; }
+.src-msg.ok { color: var(--ok); } .src-msg.bad { color: var(--urgent); }
+.src-list { list-style: none; padding: 0; margin: 0; }
+.src-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+           padding: 10px 0; border-bottom: 1px solid var(--line); }
+.src-row:last-child { border-bottom: none; }
+.src-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.src-url { font-size: 13px; word-break: break-all; }

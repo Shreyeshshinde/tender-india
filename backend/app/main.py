@@ -26,7 +26,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from .db import get_session, init_db
 from .documents.storage import get_storage
-from .models import Tender, TenderDocument
+from pydantic import BaseModel, Field
+
+from .models import CustomSource, Tender, TenderDocument
 from .refresh import latest_run, request_refresh, run_dict
 from .scraper.portals import DISPLAY_NAMES
 from .focus import LABELS as FOCUS_LABELS
@@ -291,6 +293,51 @@ def restore_tender(tender_pk: int, db: Session = Depends(get_session)):
     t.deleted_at = None
     db.commit()
     return {"id": t.id, "deleted_at": None}
+
+
+class SourceIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    url: str = Field(min_length=8, max_length=500)
+
+
+def source_dict(s: CustomSource):
+    return {"id": s.id, "name": s.name, "url": s.url, "kind": s.kind, "enabled": s.enabled,
+            "created_at": _dt(s.created_at), "last_run_at": _dt(s.last_run_at),
+            "last_status": s.last_status, "last_found": s.last_found}
+
+
+@app.get("/api/sources")
+def list_sources(db: Session = Depends(get_session)):
+    """Websites added on the website; scraped on every refresh."""
+    return [source_dict(s) for s in db.scalars(select(CustomSource).order_by(CustomSource.id.desc()))]
+
+
+@app.post("/api/sources", dependencies=[Depends(require_admin)])
+def add_source(body: SourceIn, db: Session = Depends(get_session)):
+    from urllib.parse import urlparse
+    from .scraper.custom import kind_for
+    url = body.url.strip()
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not u.netloc:
+        raise HTTPException(422, "Enter a full address starting with http:// or https://")
+    if db.scalar(select(CustomSource).where(CustomSource.url == url)):
+        raise HTTPException(409, "This website is already in the list")
+    s = CustomSource(name=body.name.strip(), url=url, kind=kind_for(url), enabled=True,
+                     created_at=now_ist())
+    db.add(s)
+    db.commit()
+    return source_dict(s)
+
+
+@app.delete("/api/sources/{source_id}", dependencies=[Depends(require_admin)])
+def delete_source(source_id: int, db: Session = Depends(get_session)):
+    """Stop checking a website. Tenders already found from it stay."""
+    s = db.get(CustomSource, source_id)
+    if not s:
+        raise HTTPException(404, "Website not found")
+    db.delete(s)
+    db.commit()
+    return {"id": source_id, "deleted": True}
 
 
 @app.get("/api/refresh")

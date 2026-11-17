@@ -36,6 +36,7 @@ JOBS = [
     ("gujarat", ["-m", "app.scraper.gujarat"]),
     ("adani", ["-m", "app.scraper.adani"]),
     ("sites", ["-m", "app.scraper.sites"]),                   # ISRO, BARC, SBI, Shirdi, Kolkata Metro
+    ("custom", ["-m", "app.scraper.custom"]),                 # websites added on the website
     ("nic", ["-m", "app.scraper.run", "--portal", "all"]),    # CPPP, Defence, PSUs, NTPC, BHEL, all NIC states
 ]
 

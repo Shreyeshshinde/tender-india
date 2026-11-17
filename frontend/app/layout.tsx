@@ -16,7 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="brand">
               <span className="brand-mark">TI</span> Tender India
             </Link>
-            <span className="tagline">Security & ground search tenders across India</span>
+            <span className="topbar-right">
+              <span className="tagline">Security & ground search tenders across India</span>
+              <Link href="/sources" className="top-link">Websites</Link>
+            </span>
           </div>
         </header>
         <main className="wrap">{children}</main>

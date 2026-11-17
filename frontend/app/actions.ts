@@ -9,13 +9,20 @@ const API = process.env.API_URL || "http://localhost:8000";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
-async function admin<T>(path: string, method: "POST" | "DELETE"): Promise<Result<T>> {
+async function admin<T>(path: string, method: "POST" | "DELETE", json?: unknown): Promise<Result<T>> {
   const headers: Record<string, string> = {};
   if (process.env.ADMIN_TOKEN) headers["X-Admin-Token"] = process.env.ADMIN_TOKEN;
+  if (json !== undefined) headers["Content-Type"] = "application/json";
   try {
-    const res = await fetch(`${API}${path}`, { method, headers, cache: "no-store" });
+    const res = await fetch(`${API}${path}`, {
+      method, headers, cache: "no-store", body: json === undefined ? undefined : JSON.stringify(json),
+    });
     const body = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false, error: body?.detail || `Server answered ${res.status}` };
+    if (!res.ok) {
+      const d = body?.detail;
+      const msg = Array.isArray(d) ? "Check the name and address" : d;
+      return { ok: false, error: msg || `Server answered ${res.status}` };
+    }
     return { ok: true, data: body as T };
   } catch {
     return { ok: false, error: "Cannot reach the server" };
@@ -31,6 +38,18 @@ export async function deleteTender(id: number) {
 export async function restoreTender(id: number) {
   const r = await admin<{ id: number }>(`/api/tenders/${id}/restore`, "POST");
   revalidatePath("/");
+  return r;
+}
+
+export async function addSource(name: string, url: string) {
+  const r = await admin<{ id: number }>("/api/sources", "POST", { name, url });
+  revalidatePath("/sources");
+  return r;
+}
+
+export async function removeSource(id: number) {
+  const r = await admin<{ id: number }>(`/api/sources/${id}`, "DELETE");
+  revalidatePath("/sources");
   return r;
 }
 
