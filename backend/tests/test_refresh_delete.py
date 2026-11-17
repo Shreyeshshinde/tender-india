@@ -180,3 +180,27 @@ def test_documents_can_be_switched_off(Session, client, monkeypatch):
     monkeypatch.setattr(mainmod, "DOCUMENTS_ENABLED", False)
     assert client.post(f"/api/tenders/{ids['T1']}/documents/request").status_code == 503
     assert client.get(f"/api/tenders/{ids['T1']}").json()["docs_enabled"] is False
+
+
+def test_parallel_groups_cover_every_portal_once():
+    from app.refresh_cli import groups
+    from app.scraper.portals import PORTALS
+    g = groups()
+    nic = [p for name, cmds in g.items() if name.startswith("nic-") for p in cmds[0][-1].split(",")]
+    assert sorted(nic) == sorted(PORTALS) and len(nic) == len(set(nic))
+    assert {"gem", "states", "websites"} <= set(g) and len(g) <= 20
+
+
+def test_parallel_start_and_finish(Session, monkeypatch, capsys):
+    from app import refresh_cli
+    import app.db as dbmod
+    monkeypatch.setattr(dbmod, "SessionLocal", Session)
+    monkeypatch.setattr(dbmod, "init_db", lambda *a: None)
+    refresh_cli.cmd_start(None)
+    out = capsys.readouterr().out
+    assert "run_id=1" in out and '"gem"' in out
+    refresh_cli.cmd_start(None)                       # second one must not start
+    assert "run_id=\n" in capsys.readouterr().out
+    refresh_cli.cmd_finish(type("A", (), {"run_id": 1, "ok": True, "message": "done"})())
+    with Session() as db:
+        assert db.get(ScrapeRun, 1).status == "done"

@@ -1,4 +1,5 @@
-# One refresh = every scraper once, saving into Supabase.
+# One refresh = every scraper once, saving into Supabase. The scrapers run in parallel
+# groups (app/refresh_cli.py), so a full refresh takes about an hour.
 # Started by the website's Refresh button (workflow_dispatch) and twice a week automatically
 # (keeps the free Supabase project from pausing). Secret needed: DATABASE_URL.
 name: Refresh tenders
@@ -9,22 +10,50 @@ on:
     - cron: "0 1 * * 1,4"        # Monday and Thursday 06:30 India time
 
 concurrency:
-  group: refresh                 # never two rounds at once
+  group: refresh                 # a new refresh waits for the running one
   cancel-in-progress: false
 
+env:
+  DB_POOL_SIZE: "1"
+  DB_MAX_OVERFLOW: "1"
+  LOG_TO_STDOUT: "1"
+  REFRESH_STALE_HOURS: "7"
+
 jobs:
-  scrape:
+  start:
     runs-on: ubuntu-latest
-    timeout-minutes: 350         # GitHub's limit is 6 hours
+    outputs:
+      run_id: ${{ steps.claim.outputs.run_id }}
+      groups: ${{ steps.claim.outputs.groups }}
     defaults:
       run:
         working-directory: backend
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DB_POOL_SIZE: "2"
-      DB_MAX_OVERFLOW: "2"
-      LOG_TO_STDOUT: "1"
-      REFRESH_STALE_HOURS: "7"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - id: claim
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m app.refresh_cli start
+
+  scrape:
+    needs: start
+    if: needs.start.outputs.run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false           # one portal failing never stops the others
+      max-parallel: 10
+      matrix:
+        group: ${{ fromJSON(needs.start.outputs.groups) }}
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,4 +63,33 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - run: playwright install --with-deps --only-shell chromium
-      - run: python -m app.schedule --once
+      # Many jobs at once: use Supabase's transaction pooler (port 6543), which shares connections.
+      - env:
+          DB: ${{ secrets.DATABASE_URL }}
+        run: echo "DATABASE_URL=${DB/:5432\//:6543/}" >> "$GITHUB_ENV"
+      - run: python -m app.refresh_cli group ${{ matrix.group }}
+
+  finish:
+    needs: [start, scrape]
+    if: always() && needs.start.outputs.run_id != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESULT: ${{ needs.scrape.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            python -m app.refresh_cli finish --run-id ${{ needs.start.outputs.run_id }} --ok --message "All scrapers finished"
+          else
+            python -m app.refresh_cli finish --run-id ${{ needs.start.outputs.run_id }} --ok --message "Finished; some portals had problems (see the GitHub run)"
+          fi
