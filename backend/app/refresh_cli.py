@@ -18,10 +18,16 @@ import sys
 
 log = logging.getLogger("refresh_cli")
 
-NIC_PER_GROUP = 4
+# Portals with thousands of tenders: their organisations are split over several jobs.
+# (From run logs: UP ~13k tenders, Tamil Nadu / Kerala ~7k, Defence / Maharashtra ~4-5k.)
+BIG_PORTALS = {"uttarpradesh": 3, "tamilnadu": 2, "kerala": 2, "defence": 2, "maharashtra": 2,
+               "madhyapradesh": 2, "jammukashmir": 2, "cppp": 2}
+SMALL_PER_GROUP = 3
 
 
 def groups():
+    """One job per big portal shard, small portals bundled a few per job.
+    GitHub runs up to 20 jobs at once, so the slowest job sets the total time."""
     from .scraper.portals import PORTALS
     g = {
         "gem": [["-m", "app.scraper.gem"]],
@@ -29,10 +35,17 @@ def groups():
                    ["-m", "app.scraper.bihar"], ["-m", "app.scraper.gujarat"]],
         "websites": [["-m", "app.scraper.adani"], ["-m", "app.scraper.sites"], ["-m", "app.scraper.custom"]],
     }
-    names = list(PORTALS)
-    for i in range(0, len(names), NIC_PER_GROUP):
-        chunk = names[i:i + NIC_PER_GROUP]
-        g[f"nic-{i // NIC_PER_GROUP + 1}"] = [["-m", "app.scraper.run", "--portal", ",".join(chunk)]]
+    small = []
+    for name in PORTALS:
+        n = BIG_PORTALS.get(name)
+        if not n:
+            small.append(name)
+            continue
+        for i in range(n):
+            g[f"{name}-{i + 1}"] = [["-m", "app.scraper.run", "--portal", name, "--shard", f"{i}/{n}"]]
+    for i in range(0, len(small), SMALL_PER_GROUP):
+        g[f"nic-{i // SMALL_PER_GROUP + 1}"] = [
+            ["-m", "app.scraper.run", "--portal", ",".join(small[i:i + SMALL_PER_GROUP])]]
     return g
 
 

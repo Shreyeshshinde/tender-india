@@ -18,10 +18,11 @@ import logging
 import sys
 import time
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 
 from ..db import SessionLocal, init_db
-from ..models import Tender, TenderDocument
+from ..models import CheckedTender, Tender, TenderDocument
+from .normalize import now_ist
 from .cppp import GePNICClient, PortalUnreachable, crawl, parse_org_list
 from .store import upsert_tender
 
@@ -65,6 +66,13 @@ def _download_now(db, rec, client, storage, docs_mode):
                     "this run. Use: python -m app.documents.assist")
 
 
+def _shard(text):
+    if not text:
+        return None
+    i, n = (int(x) for x in text.split("/"))
+    return i, n
+
+
 def run_once(args):
     init_db()
     from .portals import source_for
@@ -78,6 +86,14 @@ def run_once(args):
     # Tenders you deleted on the website: never open them again.
     deleted = set(db.scalars(select(Tender.tender_id).where(
         Tender.source == source, Tender.deleted_at.is_not(None))))
+
+    # Tenders opened before and found not relevant: tender_id -> closing date.
+    # Skipped next time unless the closing date changes (corrigendum).
+    db.execute(delete(CheckedTender).where(CheckedTender.closing_at < now_ist()))
+    db.commit()
+    checked = {} if args.full else dict(db.execute(
+        select(CheckedTender.tender_id, CheckedTender.closing_at).where(CheckedTender.source == source)).all())
+    log.info("Remembered as not relevant: %d tenders", len(checked))
 
     # What we already have: tender_id -> (title, closing, opening, has documents)
     known = {}
@@ -103,7 +119,10 @@ def run_once(args):
             from ..focus import title_could_match
             if not title_could_match(row.get("title")):
                 return False
-        old = known.get(row["tender_id"])
+        tid = row["tender_id"]
+        if tid in checked and checked[tid] == row["closing_at"]:
+            return False                  # opened before, not relevant, unchanged
+        old = known.get(tid)
         if old is None:
             return True
         title, close, open_, has_docs = old
@@ -130,6 +149,18 @@ def run_once(args):
         nonlocal pending
         result = upsert_tender(db, rec)
         counts[result] += 1
+        tid = rec["tender_id"]
+        if result == "skipped" and tid not in deleted:
+            from ..focus import title_could_match
+            close = rec.get("closing_at")
+            if title_could_match(rec.get("title")) and checked.get(tid, "?") != close:
+                if tid in checked:
+                    db.execute(update(CheckedTender).where(
+                        CheckedTender.source == source, CheckedTender.tender_id == tid
+                    ).values(closing_at=close, checked_at=now_ist()))
+                else:
+                    db.add(CheckedTender(source=source, tender_id=tid, closing_at=close))
+                checked[tid] = close
         if not args.full:
             # remember it, so a retried organisation in this same run is quick too
             old = known.get(rec["tender_id"])
@@ -146,7 +177,8 @@ def run_once(args):
         total = crawl(client, max_orgs=args.max_orgs,
                       max_tenders_per_org=args.max_per_org,
                       on_record=on_record, save_html_dir=args.save_html,
-                      needs_detail=needs_detail_full if args.full else needs_detail, source=source)
+                      needs_detail=needs_detail_full if args.full else needs_detail, source=source,
+                      shard=_shard(getattr(args, "shard", None)))
     finally:
         # Always save what we collected, even if the crawl stopped halfway
         # (internet down, Ctrl+C, crash). The next run continues from here.
@@ -172,6 +204,9 @@ def main():
                    help="Any GePNIC portal, e.g. https://mahatenders.gov.in/nicgep/app")
     p.add_argument("--max-orgs", type=int, default=None)
     p.add_argument("--max-per-org", type=int, default=None)
+    p.add_argument("--shard", default=None,
+                   help="i/n: crawl only every n-th organisation starting at i (0-based), "
+                        "so one big portal can be split across parallel jobs")
     p.add_argument("--full", action="store_true",
                    help="Re-open every detail page (slow). Default skips unchanged tenders.")
     p.add_argument("--all-details", action="store_true",

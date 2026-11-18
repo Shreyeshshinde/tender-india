@@ -186,9 +186,49 @@ def test_parallel_groups_cover_every_portal_once():
     from app.refresh_cli import groups
     from app.scraper.portals import PORTALS
     g = groups()
-    nic = [p for name, cmds in g.items() if name.startswith("nic-") for p in cmds[0][-1].split(",")]
-    assert sorted(nic) == sorted(PORTALS) and len(nic) == len(set(nic))
-    assert {"gem", "states", "websites"} <= set(g) and len(g) <= 20
+    seen = []
+    for cmds in g.values():
+        cmd = cmds[0]
+        if "app.scraper.run" not in cmd:
+            continue
+        portals = cmd[cmd.index("--portal") + 1].split(",")
+        if "--shard" in cmd:
+            i, n = cmd[cmd.index("--shard") + 1].split("/")
+            seen += [f"{portals[0]}#{i}/{n}"]
+        else:
+            seen += portals
+    plain = [s for s in seen if "#" not in s]
+    sharded = {s.split("#")[0] for s in seen if "#" in s}
+    for name in sharded:                      # every shard of a big portal is there
+        n = int([s for s in seen if s.startswith(name + "#")][0].split("/")[1])
+        assert sorted(s for s in seen if s.startswith(name + "#")) == [f"{name}#{i}/{n}" for i in range(n)]
+    assert sorted(plain + list(sharded)) == sorted(PORTALS) and len(plain) == len(set(plain))
+    assert {"gem", "states", "websites"} <= set(g)
+
+
+def test_shard_splits_organisations():
+    from app.scraper import cppp
+    orgs = [{"name": f"O{i}", "url": f"u{i}", "count": 0} for i in range(7)]
+    seen = {0: [], 1: []}
+
+    class Client:
+        base_url = "x"
+        def org_list_url(self): return "orgs"
+        def get(self, url, slow_retries=None): return url
+
+    for i in (0, 1):
+        def fake_list(html, base_url, i=i):
+            seen[i].append(html)
+            return [], None
+        cppp_parse_org = cppp.parse_org_list
+        cppp.parse_org_list = lambda html, base: orgs
+        old = cppp.parse_tender_list
+        cppp.parse_tender_list = fake_list
+        try:
+            cppp.crawl(Client(), shard=(i, 2))
+        finally:
+            cppp.parse_tender_list, cppp.parse_org_list = old, cppp_parse_org
+    assert seen[0] == ["u0", "u2", "u4", "u6"] and seen[1] == ["u1", "u3", "u5"]
 
 
 def test_parallel_start_and_finish(Session, monkeypatch, capsys):
@@ -204,3 +244,38 @@ def test_parallel_start_and_finish(Session, monkeypatch, capsys):
     refresh_cli.cmd_finish(type("A", (), {"run_id": 1, "ok": True, "message": "done"})())
     with Session() as db:
         assert db.get(ScrapeRun, 1).status == "done"
+
+
+def test_rejected_tenders_are_not_reopened(Session, monkeypatch):
+    """A tender opened once and found not relevant is remembered; the next refresh
+    skips its detail page unless the closing date changed (corrigendum)."""
+    import argparse
+    from app.scraper import run as runmod
+    from app.scraper import store
+    monkeypatch.setattr(store, "SAVE_ONLY_RELEVANT", True)
+    monkeypatch.setattr(runmod, "SessionLocal", Session)
+    monkeypatch.setattr(runmod, "init_db", lambda: None)
+    monkeypatch.setattr(runmod, "make_client", lambda engine, base: None)
+    close = (now_ist() + timedelta(days=5)).replace(microsecond=0)
+    row = {"tender_id": "X1", "title": "Supply of scanner toner cartridges", "closing_at": close,
+           "opening_at": None}
+    opened = []
+
+    def fake_crawl(client, needs_detail=None, on_record=None, **kw):
+        for r in rows:
+            if needs_detail(r):
+                opened.append(r["tender_id"])
+            on_record({**r, "source": "cppp", "source_url": "u"})
+        return len(rows)
+
+    monkeypatch.setattr(runmod, "crawl", fake_crawl)
+    args = argparse.Namespace(base_url="https://eprocure.gov.in/eprocure/app", engine="http",
+                              full=False, all_details=False, with_docs=False, max_orgs=None,
+                              max_per_org=None, save_html=None, shard=None)
+    rows = [row]
+    runmod.run_once(args)
+    runmod.run_once(args)
+    assert opened == ["X1"]                       # second run skipped it
+    rows = [{**row, "closing_at": close + timedelta(days=3)}]
+    runmod.run_once(args)
+    assert opened == ["X1", "X1"]                 # closing date moved: look again

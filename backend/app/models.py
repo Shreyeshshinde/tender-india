@@ -159,3 +159,17 @@ class ScrapeRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     new_count: Mapped[int | None] = mapped_column()            # tenders first seen in this round
     message: Mapped[str | None] = mapped_column(Text)
+
+
+class CheckedTender(Base):
+    """Tenders whose detail page was opened and found NOT relevant (so not saved).
+    Remembered so the next refresh does not open them again unless the closing
+    date changes (corrigendum). Rows past their closing date are pruned."""
+    __tablename__ = "checked_tenders"
+    __table_args__ = (UniqueConstraint("source", "tender_id", name="uq_checked_source_tender"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(40))
+    tender_id: Mapped[str] = mapped_column(String(120))
+    closing_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

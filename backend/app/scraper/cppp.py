@@ -393,7 +393,7 @@ MAX_COOLDOWNS = 2                  # after this many pauses in a row, stop the c
 
 
 def crawl(client, max_orgs=None, max_tenders_per_org=None, on_record=None, save_html_dir=None,
-          needs_detail=None, source="cppp"):
+          needs_detail=None, source="cppp", shard=None):
     """
     Walk the whole portal. Calls on_record(record) for each tender found.
 
@@ -482,6 +482,10 @@ def crawl(client, max_orgs=None, max_tenders_per_org=None, on_record=None, save_
     orgs = refresh_links()
     log.info("Found %d organisations", len(orgs))
     selected = orgs[:max_orgs] if max_orgs else orgs
+    if shard:
+        i, n = shard
+        selected = [o for k, o in enumerate(selected) if k % n == i]
+        log.info("Shard %d/%d: %d organisations", i, n, len(selected))
     retry_later, fails_in_row, cooldowns = [], 0, 0
 
     for i, org in enumerate(selected, 1):
