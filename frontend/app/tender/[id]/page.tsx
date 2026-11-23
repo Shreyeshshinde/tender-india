@@ -140,7 +140,7 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
                 </a>
               )}
             </div>
-            <CopyTenderId id={t.tender_id} />
+            {!t.document_url && !t.tender_id.startsWith("web-") && <CopyTenderId id={t.tender_id} />}
           </section>
 
           {t.changes.length > 0 && (
