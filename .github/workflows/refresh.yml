@@ -6,6 +6,11 @@ name: Refresh tenders
 
 on:
   workflow_dispatch:
+    inputs:
+      full:
+        description: "Re-check tenders rejected earlier (slower; use after changing what counts as relevant)"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 1 * * 1,4"        # Monday and Thursday 06:30 India time
 
@@ -67,7 +72,9 @@ jobs:
       - env:
           DB: ${{ secrets.DATABASE_URL }}
         run: echo "DATABASE_URL=${DB/:5432\//:6543/}" >> "$GITHUB_ENV"
-      - run: python -m app.refresh_cli group ${{ matrix.group }}
+      - env:
+          TENDER_FULL: ${{ inputs.full && '1' || '' }}
+        run: python -m app.refresh_cli group ${{ matrix.group }}
 
   finish:
     needs: [start, scrape]

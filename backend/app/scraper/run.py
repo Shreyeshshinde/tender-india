@@ -15,6 +15,7 @@ no usable data (for example it needs JavaScript), switch to the browser.
 """
 import argparse
 import logging
+import os
 import sys
 import time
 
@@ -208,6 +209,7 @@ def main():
                    help="i/n: crawl only every n-th organisation starting at i (0-based), "
                         "so one big portal can be split across parallel jobs")
     p.add_argument("--full", action="store_true",
+                   default=os.environ.get("TENDER_FULL", "").strip() in ("1", "true", "yes"),
                    help="Re-open every detail page (slow). Default skips unchanged tenders.")
     p.add_argument("--all-details", action="store_true",
                    help="Open the detail page of EVERY tender (slow). Default: only titles "
