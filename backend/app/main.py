@@ -72,6 +72,15 @@ def focus_condition(focus):
     return None
 
 
+UNDATED_OPEN_DAYS = 5     # refresh runs at least twice a week
+
+
+def is_open(now):
+    """Closing date still ahead, or no closing date on the website but still listed there."""
+    return or_(Tender.closing_at > now,
+               (Tender.closing_at.is_(None)) & (Tender.last_seen_at > now - timedelta(days=UNDATED_OPEN_DAYS)))
+
+
 def with_focus(stmt, focus):
     cond = focus_condition(focus)
     return stmt.where(cond) if cond is not None else stmt
@@ -119,7 +128,8 @@ def tender_summary(t: Tender, since=None):
         "opening_at": _dt(t.opening_at),
         "document_count": len(t.documents),
         "files_ready": sum(1 for d in t.documents if d.file_status == "stored"),
-        "is_active": bool(t.closing_at and t.closing_at > now_ist()),
+        "is_active": bool(t.closing_at > now_ist() if t.closing_at else
+                          t.last_seen_at and t.last_seen_at > now_ist() - timedelta(days=UNDATED_OPEN_DAYS)),
         "first_seen_at": _dt(t.first_seen_at),
         "is_new": bool(since and t.first_seen_at and t.first_seen_at >= since),
         "deleted_at": _dt(t.deleted_at),
@@ -235,7 +245,7 @@ def list_tenders(
     if category:
         stmt = stmt.where(Tender.category == category)
     if status == "active":
-        stmt = stmt.where(Tender.closing_at > now)
+        stmt = stmt.where(is_open(now))
     elif status == "closed":
         stmt = stmt.where(Tender.closing_at <= now)
     if closing_within_days:
@@ -308,7 +318,7 @@ def source_dict(s: CustomSource):
 
 def builtin_sources():
     """Websites the built-in scrapers already read (taken from their code, so always current)."""
-    from .scraper import adani, bihar, gem, gujarat, sites, telangana
+    from .scraper import adani, bihar, custom, gem, gujarat, sites, telangana
     from .scraper.portals import PORTALS
     out = [{"name": "GeM (Government e-Marketplace)", "url": gem.ALL_BIDS_URL, "kind": "GeM"}]
     for key, cfg in telangana.PORTALS.items():
@@ -319,6 +329,8 @@ def builtin_sources():
         out.append({"name": f"{name} (Adani)", "url": url, "kind": "Airport"})
     for cfg in sites.SITES.values():
         out.append({"name": cfg["name"], "url": cfg["url"], "kind": "Website"})
+    for p in custom.SOLAR_PAGES:
+        out.append({"name": p["name"], "url": p["url"], "kind": "Solar"})
     for key, url in PORTALS.items():
         out.append({"name": DISPLAY_NAMES.get(key, key), "url": url, "kind": "NIC portal"})
     return out
@@ -387,7 +399,7 @@ def filters(state: str | None = None,
     Pass ?state= to get only its districts."""
     now = now_ist()
     fc = focus_condition(focus)
-    base = [Tender.closing_at > now, NOT_DELETED] + ([fc] if fc is not None else [])
+    base = [is_open(now), NOT_DELETED] + ([fc] if fc is not None else [])
 
     def counts(col, *extra):
         rows = db.execute(select(col, func.count())
@@ -403,7 +415,7 @@ def filters(state: str | None = None,
 
     # how many open tenders each view has (for the view switcher)
     view_counts = dict(db.execute(select(Tender.focus, func.count())
-                                  .where(Tender.closing_at > now, NOT_DELETED)
+                                  .where(is_open(now), NOT_DELETED)
                                   .group_by(Tender.focus)).all())
     views = {
         "relevant": view_counts.get("security", 0) + view_counts.get("ground_search", 0),
@@ -430,11 +442,11 @@ def stats(focus: str = Query("relevant", pattern=FOCUS_PATTERN),
     now = now_ist()
     fc = focus_condition(focus)
     extra = [NOT_DELETED] + ([fc] if fc is not None else [])
-    active = db.scalar(select(func.count()).where(Tender.closing_at > now, *extra))
+    active = db.scalar(select(func.count()).where(is_open(now), *extra))
     week = db.scalar(select(func.count()).where(
         Tender.closing_at > now, Tender.closing_at <= now + timedelta(days=7), *extra))
     orgs = db.scalar(select(func.count(func.distinct(Tender.organisation)))
-                     .where(Tender.closing_at > now, *extra))
+                     .where(is_open(now), *extra))
     last = db.scalar(select(func.max(Tender.last_seen_at)))
     run = latest_run(db)
     return {"active": active, "closing_this_week": week, "organisations": orgs,

@@ -24,17 +24,30 @@ log = logging.getLogger("custom")
 
 NIC_MARKERS = ("/nicgep/app", "/eprocure/app")
 
+# Built-in solar pages, read like an added website on every refresh. state=None means
+# a national site: only its tenders that name a Maharashtra place are kept (app/focus.py).
+SOLAR_PAGES = [
+    {"name": "MAHAGENCO", "url": "https://www.mahagenco.in/tenders", "state": "Maharashtra"},
+    {"name": "MAHAPREIT", "url": "https://mahapreit.in/page/tender", "state": "Maharashtra"},
+    {"name": "SECI", "url": "https://www.seci.co.in/tenders", "state": None},
+]
+
 _JS_ITEMS = r"""
 () => {
+  // innerText is empty for rows inside hidden tabs; textContent still has them
+  const txt = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
   const out = [];
   document.querySelectorAll('tr').forEach(tr => {
     const a = tr.querySelector('a[href]');
-    out.push({text: tr.innerText, href: a ? a.href : null});
+    out.push({text: txt(tr), href: a ? a.href : null});
   });
   document.querySelectorAll('a[href]').forEach(a => {
     if (!a.closest('tr')) {
-      const box = a.closest('li, p, div') || a;
-      out.push({text: (box.innerText || a.innerText).slice(0, 1500), href: a.href});
+      // climb from a bare "Download" link to the block that holds the tender text
+      let box = a.closest('li, p, div') || a;
+      while (box.parentElement && box.parentElement !== document.body && txt(box).length < 80
+             && box.parentElement.querySelectorAll('a[href]').length <= 3) box = box.parentElement;
+      out.push({text: (txt(box) || txt(a)).slice(0, 1500), href: a.href});
     }
   });
   return out;
@@ -55,11 +68,12 @@ def source_key(url):
 
 def item_to_record(src, item):
     """One table row / link from an added page -> tender record, or None."""
-    from ..focus import classify
+    from ..focus import classify_tender
     text = clean_text(item.get("text"))
     if not text or len(text) < 15:
         return None
-    if not classify(text)[0]:
+    state = getattr(src, "state", None)
+    if not classify_tender(text, state=state, organisation=src.name)[0]:
         return None
     title = text[:500]
     dates = [d for d in (parse_date(m) for m in _DATE.findall(text)) if d]
@@ -72,6 +86,7 @@ def item_to_record(src, item):
         "tender_id": f"web-{tid}",
         "title": title,
         "organisation": src.name,
+        "state": state,
         "published_at": min(dates) if len(dates) > 1 else None,
         "closing_at": max(dates) if dates else None,
         "source_url": urljoin(src.url, href),
@@ -113,6 +128,9 @@ def main():
         q = q.where(CustomSource.id == args.id)
     sources = db.scalars(q).all()
     log.info("%d added websites to check", len(sources))
+    if not args.id:
+        from types import SimpleNamespace
+        sources = [SimpleNamespace(kind="page", **p) for p in SOLAR_PAGES] + list(sources)
     browser = pw = page = None
     try:
         for src in sources:

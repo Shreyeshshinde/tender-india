@@ -103,3 +103,13 @@ def test_solar_only_in_maharashtra():
     assert classify_tender(shirdi)[0] == "solar"
     assert classify_tender("Rooftop solar plant", state="Maharashtra")[0] == "solar"
     assert classify_tender("Rooftop solar plant", state="Gujarat", source="gujarat")[0] is None
+
+
+def test_page_reader_solar_needs_maharashtra():
+    from types import SimpleNamespace
+    from app.scraper.custom import item_to_record
+    item = {"text": "Tender for 40 MW grid connected solar PV plant, 5 years O&M", "href": "https://x/1.pdf"}
+    mh = SimpleNamespace(name="MAHAGENCO", url="https://www.mahagenco.in/tenders", state="Maharashtra")
+    national = SimpleNamespace(name="SECI", url="https://www.seci.co.in/tenders", state=None)
+    assert item_to_record(mh, item)["state"] == "Maharashtra"
+    assert item_to_record(national, item) is None
