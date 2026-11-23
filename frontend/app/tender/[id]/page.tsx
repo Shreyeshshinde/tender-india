@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { api, TenderFull } from "@/lib/api";
 import { dateTime, FIELD_NAMES, rupees, timeLeft } from "@/lib/format";
 import GetDocuments from "./GetDocuments";
+import CopyTenderId from "./CopyTenderId";
 import DeleteButton from "../../DeleteButton";
 
 export default async function TenderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -139,9 +140,7 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
                 </a>
               )}
             </div>
-            <p className="muted small">
-              On the official portal, search for Tender ID <b>{t.tender_id}</b>.
-            </p>
+            <CopyTenderId id={t.tender_id} />
           </section>
 
           {t.changes.length > 0 && (

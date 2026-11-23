@@ -227,3 +227,9 @@ a { color: var(--brand); }
 .src-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .src-url { font-size: 13px; word-break: break-all; }
 .src-info .chip { align-self: flex-start; font-size: 12px; }
+.id-search { margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; }
+.id-search-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.id-search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.id-search-value { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; color: var(--ink);
+  padding: 8px 10px; border-radius: 8px; background: var(--bg); overflow-wrap: anywhere; user-select: all; }
+.id-copy { padding: 8px 14px; }
