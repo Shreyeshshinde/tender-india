@@ -42,6 +42,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
     { value: "relevant", label: "Security & Ground Search" },
     { value: "security", label: "Security screening" },
     { value: "ground_search", label: "Ground search" },
+    { value: "solar", label: "Solar (Maharashtra)" },
     { value: "all", label: "All tenders" },
   ];
   const viewLink = (v: string) => {

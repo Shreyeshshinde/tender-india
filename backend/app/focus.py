@@ -92,7 +92,21 @@ EXCLUDE_IF_ONLY = [
     "manpower", "housekeeping",
 ]
 
-LABELS = {"security": "Security screening", "ground_search": "Ground search"}
+# Solar PV projects: saved only when the tender is in Maharashtra.
+SOLAR_TERMS = [
+    "solar pv", "solar photovoltaic", "solar power plant", "solar power project", "solar plant",
+    "solar project", "solar panel", "solar panels", "solar module", "solar modules",
+    "rooftop solar", "roof top solar", "ground mounted solar", "grid connected solar",
+    "solar energy", "solar power", "kwp", "mwp", "solar rooftop", "solar system",
+]
+MAHARASHTRA_WORDS = [
+    "maharashtra", "mumbai", "pune", "nagpur", "nashik", "aurangabad", "chhatrapati sambhajinagar",
+    "thane", "solapur", "kolhapur", "shirdi", "ahmednagar", "ahilyanagar", "latur", "amravati",
+    "akola", "jalgaon", "nanded", "satara", "sangli", "ratnagiri", "navi mumbai", "mahatenders",
+    "mahadiscom", "msedcl", "mahagenco", "mahatransco", "mahaurja", "meda", "cidco", "mmrda", "midc",
+]
+
+LABELS = {"security": "Security screening", "ground_search": "Ground search", "solar": "Solar (Maharashtra)"}
 
 # Focus mode while crawling: open a tender's detail page only if its TITLE
 # could be ours. Works tenders ("construction of ...", "repair of ...") are
@@ -105,6 +119,7 @@ TITLE_HINTS = [
     "eod", "frisking", "equipment", "equipments", "procurement", "purchase", "supply",
     "supplying", "stores", "store items", "items", "gadgets", "kit", "kits", "accessories",
     "search", "surveillance", "anti", "police", "jail", "prison", "airport", "court",
+    "solar", "photovoltaic",
 ]
 
 
@@ -165,6 +180,9 @@ def classify(*texts):
             sec = generic
 
     if not sec and not gnd:
+        solar = _found(text, SOLAR_TERMS)
+        if solar:
+            return "solar", 10 * len(solar), _pretty(solar)
         return None, 0, []
     if score_gnd > score_sec:
         return "ground_search", score_gnd, _pretty(gnd + sec)
@@ -181,9 +199,28 @@ def _pretty(terms):
     return out[:6]
 
 
+def in_maharashtra(state=None, source=None, *texts):
+    if (state or "").strip().lower() == "maharashtra" or (source or "").lower() in ("maharashtra", "mahatenders"):
+        return True
+    text = _norm(" ".join(t for t in texts if t))
+    return any(_has(text, w) for w in MAHARASHTRA_WORDS)
+
+
+def classify_tender(title=None, description=None, product_category=None, state=None,
+                    source=None, organisation=None, location=None):
+    """classify() plus the rule that solar tenders count only in Maharashtra."""
+    focus, score, terms = classify(title, description, product_category)
+    if focus == "solar" and not in_maharashtra(state, source, title, description,
+                                               organisation, location):
+        return None, 0, []
+    return focus, score, terms
+
+
 def apply_focus(tender):
     """Set focus fields on a Tender object (called whenever a tender is saved)."""
-    focus, score, terms = classify(tender.title, tender.description, tender.product_category)
+    focus, score, terms = classify_tender(tender.title, tender.description, tender.product_category,
+                                          tender.state, tender.source, tender.organisation,
+                                          tender.location)
     tender.focus = focus
     tender.focus_score = score or None
     tender.focus_terms = ", ".join(terms) or None
@@ -205,6 +242,7 @@ def backfill():
         print(f"Checked {len(tenders)} tenders.")
         print(f"  Security screening: {counts.get('security', 0)}")
         print(f"  Ground search:      {counts.get('ground_search', 0)}")
+        print(f"  Solar (Maharashtra): {counts.get('solar', 0)}")
         print(f"  Not relevant:       {counts.get(None, 0)}")
         examples = s.execute(select(Tender.focus, Tender.title, Tender.focus_terms)
                              .where(Tender.focus.is_not(None))

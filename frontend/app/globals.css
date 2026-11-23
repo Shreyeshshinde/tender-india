@@ -162,6 +162,7 @@ a { color: var(--brand); }
              padding: 2px 9px; border-radius: 6px; margin-bottom: 6px; background: var(--ok-bg); color: var(--ok); }
 @media (max-width: 760px) { .focus-tag { max-width: calc(100% - 100px); } }
 .focus-tag.ground_search { background: var(--soon-bg); color: var(--soon); }
+.focus-tag.solar { background: #fef3c7; color: #92400e; }
 .focus-terms { font-weight: 500; }
 
 /* ---------- manual (CAPTCHA) portals ---------- */

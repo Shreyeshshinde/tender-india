@@ -60,14 +60,14 @@ app.add_middleware(
 )
 
 
-FOCUS_PATTERN = "^(relevant|security|ground_search|all)$"
+FOCUS_PATTERN = "^(relevant|security|ground_search|solar|all)$"
 
 
 def focus_condition(focus):
     """relevant = security OR ground search (the default view)."""
     if focus == "relevant":
-        return Tender.focus.is_not(None)
-    if focus in ("security", "ground_search"):
+        return Tender.focus.in_(("security", "ground_search"))
+    if focus in ("security", "ground_search", "solar"):
         return Tender.focus == focus
     return None
 
@@ -409,6 +409,7 @@ def filters(state: str | None = None,
         "relevant": view_counts.get("security", 0) + view_counts.get("ground_search", 0),
         "security": view_counts.get("security", 0),
         "ground_search": view_counts.get("ground_search", 0),
+        "solar": view_counts.get("solar", 0),
         "all": sum(view_counts.values()),
     }
     return {

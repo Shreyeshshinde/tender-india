@@ -13,7 +13,7 @@ from sqlalchemy import select
 import os
 
 from .normalize import now_ist
-from ..focus import apply_focus, classify
+from ..focus import apply_focus, classify_tender
 
 # Only security / ground search tenders are saved. Set TENDER_SAVE_ALL=1 to save everything.
 SAVE_ONLY_RELEVANT = os.environ.get("TENDER_SAVE_ALL", "").strip() not in ("1", "true", "yes")
@@ -66,8 +66,10 @@ def upsert_tender(db, record, only_relevant=None):
         Tender.source == record["source"], Tender.tender_id == record["tender_id"]))
 
     if tender is None:
-        if only_relevant and not classify(record.get("title"), record.get("description"),
-                                          record.get("product_category"))[0]:
+        if only_relevant and not classify_tender(
+                record.get("title"), record.get("description"), record.get("product_category"),
+                record.get("state"), record.get("source"), record.get("organisation"),
+                record.get("location"))[0]:
             return "skipped"
         tender = Tender(**fields, raw=_json_safe(record),
                         first_seen_at=now, last_seen_at=now, updated_at=now)

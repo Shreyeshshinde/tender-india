@@ -5,7 +5,7 @@ export type TenderSummary = {
   id: number;
   source: string;
   source_name: string;
-  focus: "security" | "ground_search" | null;
+  focus: "security" | "ground_search" | "solar" | null;
   focus_label: string | null;
   focus_terms: string | null;
   tender_id: string;

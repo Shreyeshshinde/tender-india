@@ -89,8 +89,17 @@ def test_api_views():
         item = c.get("/api/tenders").json()["items"][0]
         assert item["focus_label"] and item["focus_terms"]
         f = c.get("/api/filters").json()
-        assert f["views"] == {"relevant": 2, "security": 1, "ground_search": 1, "all": 4}
+        assert f["views"] == {"relevant": 2, "security": 1, "ground_search": 1, "solar": 0, "all": 4}
         assert c.get("/api/stats").json()["active"] == 2
         assert c.get("/api/stats", params={"focus": "all"}).json()["active"] == 4
     finally:
         mainmod.app.dependency_overrides.clear()
+
+
+def test_solar_only_in_maharashtra():
+    from app.focus import classify_tender
+    shirdi = ("DESIGN, ENGINEERING, SUPPLY, ERECTION, TESTING & COMMISSIONING FOR 1900 KWP GRID "
+              "CONNECTED GROUND MOUNTED SOLAR PV PROJECT WITH 5 YEARS O&M AT SHREE SAIBABA - shirdi")
+    assert classify_tender(shirdi)[0] == "solar"
+    assert classify_tender("Rooftop solar plant", state="Maharashtra")[0] == "solar"
+    assert classify_tender("Rooftop solar plant", state="Gujarat", source="gujarat")[0] is None
