@@ -153,8 +153,11 @@ def portal_links(t: Tender):
     elif url and not is_file:
         portal = url
     else:
+        from .scraper import custom, sites
         u = urlparse(url)
-        portal = f"{u.scheme}://{u.netloc}/" if u.netloc else None
+        pages = [p["url"] for p in custom.SOLAR_PAGES] + [c["url"] for c in sites.SITES.values()]
+        portal = next((p for p in pages if urlparse(p).netloc == u.netloc), None) or (
+            f"{u.scheme}://{u.netloc}/" if u.netloc else None)
     return portal, (url if is_file else None)
 
 
